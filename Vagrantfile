@@ -8,14 +8,12 @@ def get_vm_name(id)
   out, err = Open3.capture2e('VBoxManage list vms')
   raise out unless err.exitstatus.zero?
 
-  path = path = File.dirname(__FILE__).split('/').last
+  path = File.dirname(__FILE__).split('/').last
   name = out.split(/\n/)
             .select { |x| x.start_with? "\"#{path}_#{id}" }
             .map { |x| x.tr('"', '') }
             .map { |x| x.split(' ')[0].strip }
             .first
-
-  name
 end
 
 
@@ -43,7 +41,7 @@ def create_nvme_disks(vbox, name)
   dir = "../vdisks"
   FileUtils.mkdir_p dir unless File.directory?(dir)
 
-  disks = (0..4).map { |x| ["nvmedisk#{x}_", '1024'] }
+  disks = (0..4).map { |x| ["nvmedisk#{x}", '1024'] }
 
   disks.each_with_index do |(name, size), i|
     file_to_disk = "#{dir}/#{name}.vdi"
@@ -73,8 +71,8 @@ def create_nvme_disks(vbox, name)
 end
 
 
-def create_disks(vbox, name)
-  unless controller_exists(name, 'SATA Controller')
+def create_disks(vbox, name, box)
+  if not controller_exists(name, 'SATA Controller') and not box.include?('almalinux')
     vbox.customize ['storagectl', :id,
                     '--name', 'SATA Controller',
                     '--add', 'sata']
@@ -83,7 +81,7 @@ def create_disks(vbox, name)
   dir = "../vdisks"
   FileUtils.mkdir_p dir unless File.directory?(dir)
 
-  disks = (1..6).map { |x| ["disk#{x}_", '1024'] }
+  disks = (1..6).map { |x| ["disk#{x}", '1024'] }
 
   disks.each_with_index do |(name, size), i|
     file_to_disk = "#{dir}/#{name}.vdi"
@@ -127,12 +125,9 @@ config.vm.define "server" do |server|
   server.vm.provider "virtualbox" do |vb|
     vb.memory = "1024"
     vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
-  end
-
-  server.vm.provider 'virtualbox' do |vbx|
-      name = get_vm_name('server')
-      create_disks(vbx, name)
-      create_nvme_disks(vbx, name)
+    name = get_vm_name('server')
+    create_disks(vb, name, config.vm.box)
+    create_nvme_disks(vb, name)
   end
 
 end
