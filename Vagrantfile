@@ -32,20 +32,21 @@ end
 
 # add NVME disks
 def create_nvme_disks(vbox, name)
-  unless controller_exists(name, 'NVME Controller')
+  controller_name = 'NVMe Controller'
+  if not controller_exists(name, controller_name)
     vbox.customize ['storagectl', :id,
-                    '--name', 'NVME Controller',
+                    '--name', controller_name,
                     '--add', 'pcie']
   end
 
-  dir = "../vdisks"
+  dir = "./vdisks"
   FileUtils.mkdir_p dir unless File.directory?(dir)
 
-  disks = (0..4).map { |x| ["nvmedisk#{x}", '1024'] }
+  disks = (0..6).map { |x| ["nvmedisk#{x}", '512'] }
 
   disks.each_with_index do |(name, size), i|
     file_to_disk = "#{dir}/#{name}.vdi"
-    port = (i ).to_s
+    port = (i).to_s
 
     unless File.exist?(file_to_disk)
       vbox.customize ['createmedium',
@@ -61,27 +62,27 @@ def create_nvme_disks(vbox, name)
     end
 
     vbox.customize ['storageattach', :id,
-                    '--storagectl', 'NVME Controller',
+                    '--storagectl', controller_name,
                     '--port', port,
-                    '--type', 'hdd',
-                    '--medium', file_to_disk,
-                    '--device', '0']
+                    '--type', "hdd",
+                    '--medium', file_to_disk]
 
   end
 end
 
 
 def create_disks(vbox, name, box)
-  if not controller_exists(name, 'SATA Controller') and not box.include?('almalinux')
+   controller_name = 'SATA Controller'
+   if not controller_exists(name, controller_name) and not box.include?('almalinux')
     vbox.customize ['storagectl', :id,
-                    '--name', 'SATA Controller',
+                    '--name', controller_name,
                     '--add', 'sata']
   end
 
-  dir = "../vdisks"
+  dir = "./vdisks"
   FileUtils.mkdir_p dir unless File.directory?(dir)
 
-  disks = (1..6).map { |x| ["disk#{x}", '1024'] }
+  disks = (1..8).map { |x| ["disk#{x}", '512'] }
 
   disks.each_with_index do |(name, size), i|
     file_to_disk = "#{dir}/#{name}.vdi"
@@ -101,7 +102,7 @@ def create_disks(vbox, name, box)
     end
 
     vbox.customize ['storageattach', :id,
-                    '--storagectl', 'SATA Controller',
+                    '--storagectl', controller_name,
                     '--port', port,
                     '--type', 'hdd',
                     '--medium', file_to_disk,
@@ -120,11 +121,13 @@ config.vm.define "server" do |server|
   config.vm.box = 'almalinux/8'
   #config.vm.box_version = "2011.0"
   server.vm.host_name = 'server'
-  server.vm.network :private_network, ip: "10.0.0.41"
+  server.vm.network :private_network, ip: "192.168.58.5"
 
   server.vm.provider "virtualbox" do |vb|
     vb.memory = "1024"
     vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    vb.customize ["modifyvm", :id, "--ioapic", "on"]
+    vb.customize ["modifyvm", :id, "--chipset", "ich9"]
     name = get_vm_name('server')
     create_disks(vb, name, config.vm.box)
     create_nvme_disks(vb, name)
