@@ -116,23 +116,40 @@ end
 
 Vagrant.configure("2") do |config|
 
-config.vm.define "server" do |server|
-  #config.vm.box = 'centos/8'
-  config.vm.box = 'almalinux/8'
-  #config.vm.box_version = "2011.0"
-  server.vm.host_name = 'server'
-  server.vm.network :private_network, ip: "192.168.58.5"
+  config.vm.define "server" do |server|
+    #config.vm.box = 'centos/8'
+    config.vm.box = 'almalinux/8'
+    #config.vm.box_version = "2011.0"
+    server.vm.host_name = 'server'
+    server.vm.network :private_network, ip: "192.168.58.5"
 
-  server.vm.provider "virtualbox" do |vb|
-    vb.memory = "1024"
-    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
-    vb.customize ["modifyvm", :id, "--ioapic", "on"]
-    vb.customize ["modifyvm", :id, "--chipset", "ich9"]
-    name = get_vm_name('server')
-    create_disks(vb, name, config.vm.box)
-    create_nvme_disks(vb, name)
+    server.vm.provider "virtualbox" do |vb|
+      vb.memory = "1024"
+      vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+      vb.customize ["modifyvm", :id, "--ioapic", "on"]
+      vb.customize ["modifyvm", :id, "--chipset", "ich9"]
+      name = get_vm_name('server')
+      create_disks(vb, name, config.vm.box)
+      create_nvme_disks(vb, name)
+    end
   end
 
-end
+  config.vm.provision "shell", inline: <<-EOF
+      sudo -i
+      yum install -y gdisk mdadm
+  EOF
+
+  config.vm.provision "shell", inline: <<-EOF
+      sgdisk -n 1:2048:+500M /dev/nvme0n1
+      for i in {2..6} ; do sgdisk -R /dev/nvme0n${i} /dev/nvme0n1; done
+      for i in {1..6} ; do sgdisk -G /dev/nvme0n${i}; done
+      lsblk
+      export DEVICE_NVME_LIST
+      for i in {1..6} ; do export DEVICE_NVME_LIST="$DEVICE_NVME_LIST /dev/nvme0n${i}"; done
+      mdadm --create /dev/md/raid10_nvme --run --level=10 --raid-devices=6 $DEVICE_NVME_LIST
+      mdadm --detail /dev/md/raid10_nvme
+      mkdir -p /etc/mdadm  # autoboot
+      mdadm --detail --scan > /etc/mdadm/mdadm.conf
+  EOF
 
 end
