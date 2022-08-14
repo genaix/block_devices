@@ -148,6 +148,7 @@ Vagrant.configure("2") do |config|
       for i in {1..6} ; do export DEVICE_NVME_LIST="$DEVICE_NVME_LIST /dev/nvme0n${i}"; done
       mdadm --create /dev/md/raid10_nvme --run --level=10 --raid-devices=6 $DEVICE_NVME_LIST
       mdadm --detail /dev/md/raid10_nvme
+      cat /proc/mdstat
       mkdir -p /etc/mdadm  # autoboot
       mdadm --detail --scan > /etc/mdadm/mdadm.conf
   EOF
